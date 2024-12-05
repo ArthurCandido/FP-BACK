@@ -1,6 +1,39 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('./db');
+const jwt = require('jsonwebtoken');
+
+// CADASTRAR USUARIO
+router.post('/usuario/', async (req, res) => {
+  const {cpf, email, senha, tipo} = req.body;
+  try {
+    const result = await pool.query(
+      'INSERT INTO usuario (cpf, email, senha, tipo) VALUES ($1, $2, $3, $4) RETURNING *',
+      [cpf, email, senha, tipo]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Erro ao cadastrar usuario:', error);
+    res.status(500).json({ error: 'Erro ao cadastrar usuario', details: error.message });
+  }
+});
+
+// AUTENTICAR USUARIO
+router.post('/autenticar/', async (req, res) => {
+  const {cpf, senha} = req.body;
+  try {
+    const result = await pool.query(
+      'INSERT INTO produto (descricao, preco, estoque, data) VALUES ($1, $2, $3, $4) RETURNING *',
+      [descricao, preco, estoque, data]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Erro ao adicionar produto:', error);
+    res.status(500).json({ error: 'Erro ao adicionar produto', details: error.message });
+  }
+});
+
+// DESAUTENTICAR USUARIO
 
 // Criar produto
 router.post('/', async (req, res) => {
