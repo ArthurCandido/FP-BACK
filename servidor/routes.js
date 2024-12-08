@@ -7,10 +7,9 @@ const cryptr = new Cryptr('myTotallySecretKey');
 
 const JWT_SECRET = 'your_jwt_secret'; // Substitua por uma chave secreta forte
 
-// Lista de tokens inválidos (em memória)
 let invalidTokens = [];
 
-// Rota 1: Cadastrar usuário
+// Cadastrar usuário
 router.post('/cadastrar', async (req, res) => {
     const { cpf, email, senha, tipo } = req.body;
 
@@ -30,7 +29,7 @@ router.post('/cadastrar', async (req, res) => {
     }
 });
 
-// Rota 2: Autenticar usuário
+// Autenticar usuário
 router.post('/autenticar', async (req, res) => {
     const { cpf, senha } = req.body;
 
@@ -80,18 +79,17 @@ const autenticarToken = (req, res, next) => {
     });
 };
 
-// Rota 3: Testar autenticação
+// Testar autenticação
 router.get('/testar-autenticacao', autenticarToken, (req, res) => {
     res.json({ message: 'Autenticação válida.', user: req.user });
 });
 
-// Rota 4: Desautenticar usuário (invalidar o token)
+// Desautenticar usuário (invalidar o token)
 router.post('/desautenticar', autenticarToken, (req, res) => {
     const token = req.headers['authorization'];
-
-    // Adiciona o token à lista de tokens inválidos
+    
     invalidTokens.push(token);
-
+    
     res.json({ message: 'Usuário desautenticado com sucesso.' });
 });
 
