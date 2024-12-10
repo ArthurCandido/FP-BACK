@@ -23,13 +23,15 @@ const createDatabase = async () => {
       if (response.rowCount === 0) {
          await pool.query(`CREATE DATABASE "${database}"`);
          console.log(
-            `Database "${database} criada com sucesso"`,
+            `Database "${database}" criada com sucesso`,
          );
       } else {
          console.log(`Database já existe`);
       }
    } catch (error) {
       console.log(error.message);
+   } finally {
+      pool.end();
    }
 };
 
@@ -44,18 +46,17 @@ const pool1 = new Pool({
 const runSingleScript = async (filepath) => {
    const script = fs.readFileSync(path.join(__dirname, filepath)).toString();
    try {
-      await pool1.connect();
       await pool1.query(script);
-      console.log("Funcionou");
+      console.log(`Script ${filepath} executado com sucesso`);
    } catch (error) {
-      console.error("Erro no script : ${filepath} :", error.message);
+      console.error(`Erro no script ${filepath}:`, error.message);
    }
 };
 
 const runScripts = async () => {
    await createDatabase();
-   await runSingleScript("./db/CREATEDATABASE");
-   await runSingleScript("./db/CREATEADMIN");
+   await runSingleScript("./db/CREATEDATABASE.sql");
+   await runSingleScript("./db/CREATEADMIN.sql");
 };
 
 runScripts();
