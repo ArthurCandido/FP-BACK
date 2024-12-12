@@ -8,7 +8,7 @@ function authenticateToken(req, res, next) {
     const token = req.header(process.env.TOKEN_HEADER_KEY);
 
     if (!token) {
-        return res.status(401).json({ error: "Access Denied: No token provided" });
+        return res.status(401).json({ error: "Acesso negado: nenhum token providenciado" });
     }
 
     try {
@@ -16,12 +16,13 @@ function authenticateToken(req, res, next) {
         req.user = verified; // Attach verified token data to the request
         next(); // Proceed to the next middleware/route handler
     } catch (error) {
-        res.status(403).json({ error: "Access Denied: Invalid token" });
+        res.status(403).json({ error: "Acesso negado: token invalido" });
     }
 }
 
 // Create user
 router.post("/usuario", authenticateToken, async (req, res) => {
+        
     const { cpf, email, senha, tipo } = req.body;
     try {
         const result = await pool.query(
@@ -97,24 +98,23 @@ router.post("/usuario/login", async (req, res) => {
     const { email, senha } = req.body;
     try {
         const result = await pool.query(
-            "SELECT * FROM usuario WHERE email = $1 AND senha = $2",
+            "SELECT tipo FROM usuario WHERE email = $1 AND senha = $2",
             [email, senha]
         );
 
         if (result.rowCount === 0) {
-            return res.status(401).json({ error: "Invalid email or password" });
+            return res.status(401).json({ error: "Email ou senha inválidos" });
         }
 
-        // Create and send JWT token
+        const tipo = result.rows[0].tipo; 
         const jwtSecretKey = process.env.JWT_SECRET_KEY;
         const data = { userId: email, time: Date.now() };
         const token = jwt.sign(data, jwtSecretKey, { expiresIn: "1h" });
 
-        res.status(200).json({ token });
+        res.status(200).json({ 'token': token, 'tipo': tipo }); 
     } catch (error) {
         console.error("Erro ao logar:", error.message);
         res.status(500).json({ error: error.message });
     }
 });
-
 module.exports = router;
