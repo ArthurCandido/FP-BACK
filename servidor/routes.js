@@ -78,7 +78,7 @@ router.post('/user/desautenticar', autenticarToken, (req, res) => {
     res.json({ message: 'Usuário desautenticado com sucesso.' });
 });
 
-// Rota: Autenticar usuário
+// Rota: Autenticar usuário por cpf
 router.post('/user/autenticar', async (req, res) => {
     const { cpf, senha } = req.body;
 
@@ -88,6 +88,27 @@ router.post('/user/autenticar', async (req, res) => {
 
     try {
         const { rows } = await pool.query('SELECT * FROM usuario WHERE cpf = $1', [cpf]);
+        if (!rows.length || cryptr.decrypt(rows[0].senha) !== senha) {
+            return errorResponse(res, 401, 'Credenciais inválidas.');
+        }
+
+        const token = jwt.sign({ cpf: rows[0].cpf, tipo: rows[0].tipo }, JWT_SECRET, { expiresIn: '1h' });
+        res.json({ message: 'Autenticado com sucesso.', token });
+    } catch (error) {
+        errorResponse(res, 500, 'Erro ao autenticar usuário.', error.message);
+    }
+});
+
+// Rota: Autenticar usuário por email
+router.post('/user/autenticaremail', async (req, res) => {
+    const { email, senha } = req.body;
+
+    if (!email || !senha) {
+        return errorResponse(res, 400, 'E-mail e senha são obrigatórios.');
+    }
+
+    try {
+        const { rows } = await pool.query('SELECT * FROM usuario WHERE email = $1', [email]);
         if (!rows.length || cryptr.decrypt(rows[0].senha) !== senha) {
             return errorResponse(res, 401, 'Credenciais inválidas.');
         }
