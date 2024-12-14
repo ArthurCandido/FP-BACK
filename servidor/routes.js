@@ -100,7 +100,7 @@ router.post('/user/autenticar', async (req, res) => {
 });
 
 // Rota: Autenticar usuário por email
-router.post('/user/autenticaremial', async (req, res) => {
+router.post('/user/autenticaremail', async (req, res) => {
     const { email, senha } = req.body;
 
     if (!email || !senha) {
