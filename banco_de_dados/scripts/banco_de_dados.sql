@@ -24,7 +24,7 @@ create table holerite(
 	mes int not null,
 	ano int not null,
 	cpf_usuario varchar references usuario(cpf) not null,
-	caminho_documento serial references documento(caminho),
+	caminho_documento serial references documento(caminho) not null,
 	primary key(mes, ano, cpf_usuario)
 );
 
@@ -32,6 +32,13 @@ create table nota_fiscal(
 	mes int not null,
 	ano int not null,
 	cpf_usuario varchar references usuario(cpf) not null,
-	caminho_documento serial references documento(caminho),
+	caminho_documento serial references documento(caminho) not null,
 	primary key(mes, ano, cpf_usuario)
 );
+
+insert into usuario(cpf, email, senha, tipo) values
+	('null','null','null','null')
+;
+insert into documento(caminho, nome, cpf_usuario) values
+	(1,'null','null')
+;
