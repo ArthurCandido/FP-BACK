@@ -64,7 +64,7 @@ router.post('/dev/user', async (req, res) => {
     try {
         const senhaCriptografada = cryptr.encrypt(senha);
         await pool.query('INSERT INTO usuario (cpf, email, senha, tipo) VALUES ($1, $2, $3, $4)', [cpf, email, senhaCriptografada, tipo]);
-        res.status(201).json({ message: 'Usuário cadastrado com sucesso.' });
+        res.status(200).json({ message: 'Usuário cadastrado com sucesso.' });
     } catch (error) {
         errorResponse(res, 500, 'Erro ao cadastrar usuário.', error.message);
     }
@@ -93,7 +93,12 @@ router.post('/user/autenticar', async (req, res) => {
         }
 
         const token = jwt.sign({ cpf: rows[0].cpf, tipo: rows[0].tipo }, JWT_SECRET, { expiresIn: '1h' });
-        res.json({ message: 'Autenticado com sucesso.', token });
+        
+        res.json({
+            message: 'Autenticado com sucesso.',
+            token,
+            tipo: rows[0].tipo
+        });
     } catch (error) {
         errorResponse(res, 500, 'Erro ao autenticar usuário.', error.message);
     }
@@ -114,7 +119,12 @@ router.post('/user/autenticaremail', async (req, res) => {
         }
 
         const token = jwt.sign({ cpf: rows[0].cpf, tipo: rows[0].tipo }, JWT_SECRET, { expiresIn: '1h' });
-        res.json({ message: 'Autenticado com sucesso.', token });
+        
+        res.json({
+            message: 'Autenticado com sucesso.',
+            token,
+            tipo: rows[0].tipo
+        });
     } catch (error) {
         errorResponse(res, 500, 'Erro ao autenticar usuário.', error.message);
     }
@@ -140,7 +150,7 @@ router.post('/admin/holerite', autenticarToken, verificarAdmin, async (req, res)
             'INSERT INTO holerite (mes, ano, cpf_usuario, caminho_documento) VALUES ($1, $2, $3, $4)', 
             [mes, ano, cpf_usuario, caminho_documento]
         );
-        res.status(201).json({ message: 'Holerite cadastrado com sucesso.' });
+        res.status(200).json({ message: 'Holerite cadastrado com sucesso.' });
     } catch (error) {
         errorResponse(res, 500, 'Erro ao cadastrar holerite.', error.message);
     }
@@ -236,7 +246,7 @@ router.post('/admin/user', autenticarToken, verificarAdmin, async (req, res) => 
     try {
         const senhaCriptografada = cryptr.encrypt(senha);
         await pool.query('INSERT INTO usuario (cpf, email, senha, tipo) VALUES ($1, $2, $3, $4)', [cpf, email, senhaCriptografada, tipo]);
-        res.status(201).json({ message: 'Usuário cadastrado com sucesso.' });
+        res.status(200).json({ message: 'Usuário cadastrado com sucesso.' });
     } catch (error) {
         errorResponse(res, 500, 'Erro ao cadastrar usuário.', error.message);
     }
