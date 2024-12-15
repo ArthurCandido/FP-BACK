@@ -94,7 +94,7 @@ router.post('/user/autenticar', async (req, res) => {
 
         const token = jwt.sign({ cpf: rows[0].cpf, tipo: rows[0].tipo }, JWT_SECRET, { expiresIn: '1h' });
         
-        res.json({
+        res.status(200).json({
             message: 'Autenticado com sucesso.',
             token,
             tipo: rows[0].tipo
@@ -120,7 +120,7 @@ router.post('/user/autenticaremail', async (req, res) => {
 
         const token = jwt.sign({ cpf: rows[0].cpf, tipo: rows[0].tipo }, JWT_SECRET, { expiresIn: '1h' });
         
-        res.json({
+        res.status(200).json({
             message: 'Autenticado com sucesso.',
             token,
             tipo: rows[0].tipo
