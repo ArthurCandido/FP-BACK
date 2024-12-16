@@ -4,7 +4,8 @@ create table usuario(
 	cpf varchar primary key,
 	email varchar not null,
 	senha varchar not null,
-	tipo varchar not null
+	tipo varchar not null,
+	nome varchar not null
 );
 
 create table documento(
@@ -36,9 +37,3 @@ create table nota_fiscal(
 	primary key(mes, ano, cpf_usuario)
 );
 
-insert into usuario(cpf, email, senha, tipo) values
-	('null','null','null','null')
-;
-insert into documento(caminho, nome, cpf_usuario) values
-	(1,'null','null')
-;
