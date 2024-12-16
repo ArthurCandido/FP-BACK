@@ -37,7 +37,7 @@ const verificarAdmin = (req, res, next) => {
 
 // Middlewares para verificar tipo de usuário clt
 const verificarClt = (req, res, next) => {
-    if (req.user.tipo !== 'clt') {
+    if (req.user.tipo !== 'CLT') {
         return errorResponse(res, 403, 'Acesso restrito a CLTs.');
     }
     next();
@@ -45,7 +45,7 @@ const verificarClt = (req, res, next) => {
 
 // Middlewares para verificar tipo de usuário pj
 const verificarPj = (req, res, next) => {
-    if (req.user.tipo !== 'pj') {
+    if (req.user.tipo !== 'PJ') {
         return errorResponse(res, 403, 'Acesso restrito a PJs.');
     }
     next();
@@ -55,7 +55,7 @@ const verificarPj = (req, res, next) => {
 
 // Rota: Cadastrar usuário
 router.post('/dev/user', async (req, res) => {
-    const { cpf, email, senha, tipo } = req.body;
+    const { cpf, email, senha, tipo, nome} = req.body;
 
     if (!cpf || !email || !senha || !tipo) {
         return errorResponse(res, 400, 'Todos os campos são obrigatórios.');
@@ -63,7 +63,7 @@ router.post('/dev/user', async (req, res) => {
 
     try {
         const senhaCriptografada = cryptr.encrypt(senha);
-        await pool.query('INSERT INTO usuario (cpf, email, senha, tipo) VALUES ($1, $2, $3, $4)', [cpf, email, senhaCriptografada, tipo]);
+        await pool.query('INSERT INTO usuario (cpf, email, senha, tipo, nome) VALUES ($1, $2, $3, $4, $5    )', [cpf, email, senhaCriptografada, tipo, nome]);
         res.status(200).json({ message: 'Usuário cadastrado com sucesso.' });
     } catch (error) {
         errorResponse(res, 500, 'Erro ao cadastrar usuário.', error.message);
@@ -237,15 +237,16 @@ router.get('/admin/testar-autenticacao', autenticarToken, verificarAdmin, (req, 
 
 // Rota: Cadastrar usuário
 router.post('/admin/user', autenticarToken, verificarAdmin, async (req, res) => {
-    const { cpf, email, senha, tipo } = req.body;
+    const { cpf, email, senha, nome, tipo } = req.body;
 
+    
     if (!cpf || !email || !senha || !tipo) {
         return errorResponse(res, 400, 'Todos os campos são obrigatórios.');
     }
 
     try {
         const senhaCriptografada = cryptr.encrypt(senha);
-        await pool.query('INSERT INTO usuario (cpf, email, senha, tipo) VALUES ($1, $2, $3, $4)', [cpf, email, senhaCriptografada, tipo]);
+        await pool.query('INSERT INTO usuario (cpf, email, senha, tipo, nome) VALUES ($1, $2, $3, $4, $5)', [cpf, email, senhaCriptografada, tipo, nome]);
         res.status(200).json({ message: 'Usuário cadastrado com sucesso.' });
     } catch (error) {
         errorResponse(res, 500, 'Erro ao cadastrar usuário.', error.message);
@@ -254,15 +255,19 @@ router.post('/admin/user', autenticarToken, verificarAdmin, async (req, res) => 
 
 // Rota: Listar usuários com filtro
 router.get('/admin/user', autenticarToken, verificarAdmin, async (req, res) => {
-    const { cpf, email, tipo } = req.query;
+    const { cpf, email, tipo, nome } = req.query;
 
-    let query = 'SELECT cpf, email, tipo FROM usuario';
+    let query = 'SELECT cpf, email, tipo, nome FROM usuario';
     const params = [];
     const conditions = [];
 
     if (cpf) {
         conditions.push('cpf = $' + (params.length + 1));
         params.push(cpf);
+    }
+    if(nome){
+        conditions.push('nome = $' + (params.length + 1));
+        params.push(`%${nome}%`);
     }
     if (email) {
         conditions.push('email ILIKE $' + (params.length + 1));
@@ -288,9 +293,9 @@ router.get('/admin/user', autenticarToken, verificarAdmin, async (req, res) => {
 // Rota: Alterar usuário
 router.put('/admin/user/:cpf', autenticarToken, verificarAdmin, async (req, res) => {
     const { cpf } = req.params;
-    const { email, senha, tipo } = req.body;
+    const { email, nome, tipo } = req.body;
 
-    if (!email && !senha && !tipo) {
+    if (!email && !nome && !tipo) {
         return errorResponse(res, 400, 'Nenhum campo para atualizar foi enviado.');
     }
 
@@ -301,10 +306,9 @@ router.put('/admin/user/:cpf', autenticarToken, verificarAdmin, async (req, res)
         fields.push('email = $' + (params.length + 1));
         params.push(email);
     }
-    if (senha) {
-        const senhaCriptografada = cryptr.encrypt(senha);
-        fields.push('senha = $' + (params.length + 1));
-        params.push(senhaCriptografada);
+    if(nome){
+        fields.push('nome = $' + (params.length + 1));
+        params.push(nome);
     }
     if (tipo) {
         fields.push('tipo = $' + (params.length + 1));
