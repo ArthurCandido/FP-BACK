@@ -37,3 +37,9 @@ create table nota_fiscal(
 	primary key(mes, ano, cpf_usuario)
 );
 
+insert into usuario(cpf, email, senha, tipo, nome) values
+	('null','null','null','null','null')
+;
+insert into documento(caminho, nome, cpf_usuario) values
+	(1,'null','null')
+;
