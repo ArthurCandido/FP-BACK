@@ -1,6 +1,7 @@
 const express = require('express');
-const pool = require('../servidor/db');
+const pool = require('../db');
 const bcrypt = require('bcrypt');
+const autenticarToken = require('./authMiddleware');
 const jwt = require('jsonwebtoken');
 const router = express.Router();
 
@@ -127,18 +128,6 @@ router.post('/login', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
-// Middleware para autenticar token JWT
-const autenticarToken = (req, res, next) => {
-  const token = req.headers['authorization'];
-  if (!token) return res.status(403).json({ message: 'Token não fornecido' });
-
-  jwt.verify(token, JWT_SECRET, (err, decoded) => {
-    if (err) return res.status(403).json({ message: 'Token inválido' });
-    req.user = decoded;
-    next();
-  });
-};
 
 /**
  * @swagger

@@ -1,9 +1,7 @@
 const express = require('express');
-const pool = require('../servidor/db');
-const jwt = require('jsonwebtoken');
+const pool = require('../db');
 const router = express.Router();
-
-const JWT_SECRET = 'your_jwt_secret';
+const autenticarToken = require('./authMiddleware');
 
 /**
  * @swagger
