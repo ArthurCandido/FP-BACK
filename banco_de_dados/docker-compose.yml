@@ -9,14 +9,10 @@ services:
     shm_size: 128mb
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: gabi
+      POSTGRES_PASSWORD: senha123
+      POSTGRES_DB: foobase
     volumes:
       - ./scripts:/docker-entrypoint-initdb.d
     ports:
-      - "54320:5432"
-  adminer:
-    image: adminer
-    restart: always
-    ports:
-      - 8080:8080
+      - "5434:5432"
+
