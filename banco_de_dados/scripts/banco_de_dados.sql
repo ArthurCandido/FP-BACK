@@ -42,8 +42,4 @@ insert into usuario(cpf, email, senha, tipo, nome) values
 ;
 insert into documento(caminho, nome, cpf_usuario) values
 	(1,'null','null')
-<<<<<<< HEAD
 ;
-=======
-;
->>>>>>> main

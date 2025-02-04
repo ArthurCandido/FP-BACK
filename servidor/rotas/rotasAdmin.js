@@ -14,6 +14,11 @@ router.post('/holerite', autenticarToken, verificarAdmin, async (req, res) => {
     }
 
     try {
+        const userCadastrado = await pool.query("SELECT * FROM usuario WHERE cpf = $1 AND tipo = 'CLT'", [cpf_usuario]);
+        if(userCadastrado.rowCount === 0) {
+            return errorResponse(res, 404, 'Usuário não cadastrado no sistema ou não é CLT.');
+        }
+
         await pool.query(
             'INSERT INTO holerite (mes, ano, cpf_usuario, caminho_documento) VALUES ($1, $2, $3, $4)', 
             [mes, ano, cpf_usuario, caminho_documento]
