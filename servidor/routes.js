@@ -1,9 +1,10 @@
 const express = require('express');
+const path = require('node:path');
 const router = express.Router();
 const pool = require('./db');
 const jwt = require('jsonwebtoken');
 const Cryptr = require('cryptr');
-
+const upload = require('./file-upload');
 const cryptr = new Cryptr('myTotallySecretKey');
 const JWT_SECRET = 'your_jwt_secret';
 let invalidTokens = [];
@@ -395,5 +396,64 @@ router.get('/pj/testar-autenticacao', autenticarToken, verificarPj, (req, res) =
     res.json({ message: 'Autenticação válida para PJ.', user: req.user });
 });
 
+//<><><> Rota upload de arquivo
 
+router.post('/arquivo/upload', upload.single('file'), autenticarToken, async (req, res) => {
+    const {cpf_usuario} = req.body;
+    if(!req.file){
+        return res.status(413).json({error: 'File not uploaded'});
+    }
+    try{
+        const result = await pool.query("INSERT into documento (nome, cpf_usuario) values  ($1, $2)", [req.file.filename, cpf_usuario]);
+        return res.status(201).json({message: 'File uploaded sucessfully'});
+    }catch(error) {
+        errorResponse(res, 500, 'Erro ao inserir o documento no banco de dados', error.message);
+    }
+});
+
+
+//<><><> Listar documentos
+
+router.get('/arquivo/listar', autenticarToken, async (req, res) =>{
+    const {cpf_usuario} = req.body;
+    
+    try{
+        const result = await pool.query('SELECT * FROM documento WHERE cpf_usuario = $1', [cpf_usuario]);
+
+        if(!result.rowCount === 0){
+            return res.status(404).json({error: 'Nenhum arquivo encontrado'});
+        }
+
+        res.status(200).json(result.rows);
+
+    } catch(error){
+        return res.status(404).json({error: 'Erro ao buscar no banco de dados'});
+    }
+});
+
+//<><><> Download de arquivo baseado no id
+router.get("/arquivo/download/:caminho", async (req, res) => {
+    const { caminho } = req.params;
+    const {cpf_usuario } = req.body; 
+
+    try {
+        const result = await pool.query("SELECT nome FROM documento WHERE cpf_usuario = $1 AND caminho = $2", [cpf_usuario, caminho]);
+
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "No file found for this user" });
+        }
+
+        const filename = result.rows[0].nome;
+        const filePath = path.join(__dirname, "uploads", filename);
+
+        res.download(filePath, filename, (err) => {
+            if (err) {
+                res.status(500).json({ error: "Error downloading file" });
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ error: "Database error", details: error.message });
+    }
+});
 module.exports = router;
