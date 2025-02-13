@@ -15,10 +15,12 @@ create table documento(
 );
 
 create table ponto(
-	horario timestamp not null,
+	dia date not null,
+	horario_entrada timestamp not null,
+	horario_saida timestamp not null,
+	descricao varchar references usuario(cpf) not null,
 	cpf_usuario varchar references usuario(cpf) not null,
-	entrada_saida boolean not null,
-	primary key(horario, cpf_usuario)
+	primary key(dia, cpf_usuario)
 );
 
 create table holerite(
@@ -36,10 +38,3 @@ create table nota_fiscal(
 	caminho_documento serial references documento(caminho) not null,
 	primary key(mes, ano, cpf_usuario)
 );
-
-insert into usuario(cpf, email, senha, tipo, nome) values
-	('null','null','null','null','null')
-;
-insert into documento(caminho, nome, cpf_usuario) values
-	(1,'null','null')
-;
