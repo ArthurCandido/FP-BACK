@@ -1,41 +1,35 @@
+
 const multer = require("multer");
-const path = require("node:path");
-let fileNumber = 0;
+const path = require("path");
+const fs = require("fs");
+
+// Ensure uploads directory exists
+const uploadDir = path.resolve(__dirname, "uploads");
+if (!fs.existsSync(uploadDir)) {
+	fs.mkdirSync(uploadDir, { recursive: true });
+}
 
 const storageConfig = multer.diskStorage({
-	// destinations is uploads folder 
-	// under the project directory
-	destination: path.join(__dirname, "uploads"),
-	filename: (req, file, res) => {
-		// file name is prepended with current time
-		// in milliseconds to handle duplicate file names
-		res(null, Date.now() + "-" + file.originalname);
+	destination: uploadDir,
+	filename: (req, file, cb) => {
+		cb(null, `${Date.now()}-${file.originalname}`);
 	},
 });
 
-// file filter for filtering only images
-const fileFilterConfig = function(req, file, cb) {
-	if (file.mimetype === "application/pdf"
-		|| file.mimetype === "application/pdf") {
-		// calling callback with true
-		// as mimetype of file is image
+// File filter for allowing only PDFs
+const fileFilterConfig = (req, file, cb) => {
+	if (file.mimetype === "application/pdf") {
 		cb(null, true);
 	} else {
-		// false to indicate not to store the file
-		cb(null, false);
+		cb(new Error("Only PDF files are allowed!"), false);
 	}
 };
 
-// creating multer object for storing
-// with configuration
 const upload = multer({
-	// applying storage and file filter
 	storage: storageConfig,
-	limits: {
-		// limits file size to 5 MB
-		fileSize: 1024 * 1024 * 5
-	},
+	limits: { fileSize: 1024 * 1024 * 5 }, // 5MB limit
 	fileFilter: fileFilterConfig,
 });
 
 module.exports = upload;
+

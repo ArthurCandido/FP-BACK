@@ -456,4 +456,46 @@ router.get("/arquivo/download/:caminho", async (req, res) => {
         res.status(500).json({ error: "Database error", details: error.message });
     }
 });
+
+
+router.post('/admin/notafiscal', autenticarToken, verificarAdmin, upload.single('file'), async (req, res) => {
+    const { mes, ano, cpf_usuario } = req.body;
+
+    if (!mes || !ano || !cpf_usuario || !req.file) {
+        return errorResponse(res, 400, 'Todos os campos são obrigatórios, incluindo o arquivo.');
+    }
+
+    try {
+        const caminho_documento = req.file.filename;
+
+        const result = await pool.query(
+            'INSERT INTO documento (nome, cpf_usuario) VALUES ($1, $2) RETURNING *', 
+            [req.file.filename, cpf_usuario]
+        );
+
+        await pool.query(
+            'INSERT INTO nota_fiscal (mes, ano, cpf_usuario, caminho_documento) VALUES ($1, $2, $3, $4)', 
+            [mes, ano, cpf_usuario, result.rows[0].caminho]
+        );
+
+        res.status(200).json({ message: 'Nota fiscal cadastrado com sucesso.' });
+    } catch (error) {
+        errorResponse(res, 500, 'Erro ao cadastrar nota fiscal.', error.message);
+    }
+});
+
+router.post('/user/ponto', autenticarToken, async (req, res) => {
+    const { cpf_usuario, entrada_saida } = req.body;
+    if (!cpf_usuario) {
+        return errorResponse(res, 400, 'Cpf obrigatório');
+    }
+
+    try {
+        await pool.query('INSERT INTO ponto (horario, cpf_usuario, entrada_saida) VALUES (now(), $1, $2)', [cpf_usuario, entrada_saida]);
+        res.status(200).json({ message: 'Ponto registrado com sucesso.' }); // Corrected message
+    } catch (error) {
+        errorResponse(res, 500, 'Erro ao registrar ponto.', error.message); // Adjusted error message
+    }
+});
+
 module.exports = router;
