@@ -10,6 +10,8 @@ const JWT_SECRET = 'your_jwt_secret';
 const fs = require('fs');
 let invalidTokens = [];
 
+const limit = 10;
+
 // Utilitário para enviar respostas de erro
 const errorResponse = (res, status, message, details = null) => 
     res.status(status).json({ message, ...(details && { details }) });
@@ -408,6 +410,32 @@ router.post('/admin/user', autenticarToken, verificarAdmin, async (req, res) => 
         res.status(200).json({ message: 'Usuário cadastrado com sucesso.' });
     } catch (error) {
         errorResponse(res, 500, 'Erro ao cadastrar usuário.', error.message);
+    }
+});
+
+// Rota: Listar usuários com pesquisa e paginação
+router.post('/admin/user/list', autenticarToken, verificarAdmin, async (req, res) => {
+    const { cpf_nome, pagina } = req.body;
+
+    let query = `SELECT cpf, email, tipo, nome FROM usuario LIMIT $1 OFFSET $2`;
+    let params = [limit, pagina * limit];
+
+    if (cpf_nome) {
+        const regex = /^[0-9.\-]+$/;
+        if(regex.test(cpf_nome)){
+            query = `SELECT cpf, email, tipo, nome FROM usuario WHERE cpf ILIKE $3 LIMIT $1 OFFSET $2`;
+            params = [limit, pagina * limit, `%${cpf_nome}%`];
+        }else{
+            query = `SELECT cpf, email, tipo, nome FROM usuario WHERE nome ILIKE $3 LIMIT $1 OFFSET $2`;
+            params = [limit, pagina * limit, `%${cpf_nome}%`];
+        }
+    }
+
+    try {
+        const result = await pool.query(query, params);
+        res.status(200).json(result.rows);
+    } catch (error) {
+        errorResponse(res, 500, 'Erro ao listar usuários.', error.message);
     }
 });
 
