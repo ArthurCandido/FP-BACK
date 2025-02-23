@@ -7,6 +7,7 @@ const Cryptr = require('cryptr');
 const upload = require('./file-upload');
 const cryptr = new Cryptr('myTotallySecretKey');
 const JWT_SECRET = 'your_jwt_secret';
+const fs = require('fs');
 let invalidTokens = [];
 
 // Utilitário para enviar respostas de erro
@@ -93,7 +94,7 @@ router.post('/user/autenticar', async (req, res) => {
             return errorResponse(res, 401, 'Credenciais inválidas.');
         }
 
-        const token = jwt.sign({ cpf: rows[0].cpf, tipo: rows[0].tipo }, JWT_SECRET, { expiresIn: '1h' });
+        const token = jwt.sign({ cpf_usuario: rows[0].cpf, tipo: rows[0].tipo }, JWT_SECRET, { expiresIn: '1h' });
         
         res.status(200).json({
             message: 'Autenticado com sucesso.',
@@ -138,26 +139,22 @@ router.get('/user/testar-autenticacao', autenticarToken, (req, res) => {
 
 //<><><> Rotas administrador
 
-// Rota: Cadastrar holerite
-router.post('/admin/holerite', autenticarToken, verificarAdmin, async (req, res) => {
-    const { mes, ano, cpf_usuario, caminho_documento } = req.body;
-
-    if (!mes || !ano || !cpf_usuario || !caminho_documento) {
-        return errorResponse(res, 400, 'Todos os campos são obrigatórios.');
-    }
-
-    try {
-        await pool.query(
-            'INSERT INTO holerite (mes, ano, cpf_usuario, caminho_documento) VALUES ($1, $2, $3, $4)', 
-            [mes, ano, cpf_usuario, caminho_documento]
-        );
-        res.status(200).json({ message: 'Holerite cadastrado com sucesso.' });
-    } catch (error) {
-        errorResponse(res, 500, 'Erro ao cadastrar holerite.', error.message);
-    }
+// Rotas: Testar autenticação para CLT
+router.get('/clt/testar-autenticacao', autenticarToken, verificarClt, (req, res) => {
+    res.json({ message: 'Autenticação válida para CLT.', user: req.user });
 });
 
+
+//<><><> Rotas PJ
+
+// Rotas: Testar autenticação para PJ
+router.get('/pj/testar-autenticacao', autenticarToken, verificarPj, (req, res) => {
+    res.json({ message: 'Autenticação válida para PJ.', user: req.user });
+});
+
+
 // Rota: Listar holerites com filtro
+
 router.get('/admin/holerite', autenticarToken, verificarAdmin, async (req, res) => {
     const { mes, ano, cpf_usuario } = req.query;
 
@@ -191,25 +188,171 @@ router.get('/admin/holerite', autenticarToken, verificarAdmin, async (req, res) 
 });
 
 // Rota: Alterar holerite
-router.put('/admin/holerite/:cpf_usuario/:mes/:ano', autenticarToken, verificarAdmin, async (req, res) => {
-    const { cpf_usuario, mes, ano } = req.params;
-    const { caminho_documento } = req.body;
 
-    if (!caminho_documento) {
-        return errorResponse(res, 400, 'O campo caminho_documento é obrigatório.');
+router.put('/admin/holerite/', autenticarToken, verificarAdmin, upload.single('file'), async (req, res) => {
+    const { cpf_usuario, mes, ano } = req.body;
+
+    if (!mes || !ano || !cpf_usuario) {
+        return errorResponse(res, 400, 'Todos os campos são obrigatórios');
+    }
+
+    if(mes > 12 || mes < 1){
+        return errorResponse(res, 400, 'O mes deve ser menor que 12 e maior que 1');
+    }
+
+    if(ano > 2100 || ano < 1960){
+        return errorResponse(res, 400, 'O ano deve ser acima de 1960 e menor que 2100')
+    }
+ 
+    if(!req.file){
+        return res.status(413).json({error: 'Nao enviou o arquivo'});
     }
 
     try {
+        await pool.query('BEGIN');
+
         const result = await pool.query(
-            'UPDATE holerite SET caminho_documento = $1 WHERE cpf_usuario = $2 AND mes = $3 AND ano = $4', 
-            [caminho_documento, cpf_usuario, mes, ano]
+            'DELETE FROM holerite WHERE mes = $1 AND ano = $2 AND cpf_usuario = $3 RETURNING *', 
+            [mes, ano, cpf_usuario]
         );
+
         if (result.rowCount === 0) {
+        fs.unlink(path.join('uploads/', req.file.filename), (err) => {
+            if (err && err.code !== 'ENOENT') {
+                console.error('Erro ao excluir arquivo temporário:', err);
+            }
+        });
+
             return errorResponse(res, 404, 'Holerite não encontrado.');
         }
-        res.status(200).json({ message: 'Holerite atualizado com sucesso.' });
+
+        const deletar = await pool.query(
+        'DELETE FROM documento WHERE caminho = $1 RETURNING *',
+        [result.rows[0].caminho_documento]);
+
+        const insert = await pool.query(
+        'INSERT INTO documento (nome, cpf_usuario) values ($1,$2) RETURNING *', [req.file.filename, cpf_usuario]);
+
+        await pool.query(
+        'INSERT INTO holerite (mes, ano, cpf_usuario, caminho_documento) VALUES ($1, $2, $3, $4)',
+        [mes, ano, cpf_usuario, insert.rows[0].caminho]);
+
+        await pool.query('COMMIT');
+
+        fs.unlink(path.join('uploads/', deletar.rows[0].nome), (err) => {
+            if (err && err.code !== 'ENOENT') {
+                console.error('Erro ao excluir arquivo temporário:', err);
+            }
+        });
+
+        return res.status(200).json({ message: 'Holerite atualizado com sucesso.' });
     } catch (error) {
+
+        await pool.query('ROLLBACK');
+
+        fs.unlink(path.join('uploads/', req.file.filename), (err) => {
+            if (err && err.code !== 'ENOENT') {
+                console.error('Erro ao excluir arquivo temporário:', err);
+            }
+        });
         errorResponse(res, 500, 'Erro ao atualizar holerite.', error.message);
+    }
+});
+
+
+//CADASTRAR NOTAFISCAL
+router.post('/pj/notafiscal', autenticarToken, verificarPj, upload.single('file'), async (req, res) => {
+    const { mes, ano } = req.body;
+    const { cpf_usuario } = req.user;
+
+    if (!mes || !ano || !cpf_usuario) {
+        return errorResponse(res, 400, 'Todos os campos são obrigatórios');
+    }
+
+    if(mes > 12 || mes < 1){
+        return errorResponse(res, 400, 'O mes deve ser menor que 12 e maior que 1');
+    }
+
+    if(ano > 2100 || ano < 1960){
+        return errorResponse(res, 400, 'O ano deve ser acima de 1960 e menor que 2100')
+    }
+ 
+    if(!req.file){
+        return res.status(413).json({error: 'Nao enviou o arquivo'});
+    }
+
+    try {
+        await pool.query('BEGIN');
+        const result = await pool.query(
+            'INSERT INTO documento (nome, cpf_usuario) VALUES ($1, $2) RETURNING *', 
+            [req.file.filename, cpf_usuario]
+        );
+
+        await pool.query(
+            'INSERT INTO nota_fiscal (mes, ano, cpf_usuario, caminho_documento) VALUES ($1, $2, $3, $4)', 
+            [mes, ano, cpf_usuario, result.rows[0].caminho]
+        );
+
+        await pool.query('COMMIT');
+
+        return res.status(200).json({ message: 'Nota fiscal cadastrado com sucesso.' });
+
+    } catch (error) {
+        await pool.query('ROLLBACK');
+
+        fs.unlink(path.join('uploads/', req.file.filename), (err) => {
+            if (err && err.code !== 'ENOENT') {
+                console.error('Erro ao excluir arquivo temporário:', err);
+            }
+        });
+
+        return errorResponse(res, 500, 'Erro ao cadastrar nota fiscal.', error.message);
+    }
+});
+
+// Rota: Cadastrar holerite
+router.post('/admin/holerite', autenticarToken, verificarAdmin, upload.single('file'), async (req, res) => {
+    const { mes, ano, cpf_usuario } = req.body;
+    let caminho;
+    if (!mes || !ano || !cpf_usuario) {
+        return errorResponse(res, 400, 'Todos os campos são obrigatórios.');
+    }
+
+    if(mes > 12 || mes < 1){
+        return errorResponse(res, 400, 'O mes deve ser menor que 12 e maior que 1');
+    }
+
+    if(ano > 2100 || ano < 1960){
+        return errorResponse(res, 400, 'O ano deve ser acima de 1960 e menor que 2100')
+    }
+
+    if(!req.file){
+        return res.status(413).json({error: 'File not uploaded'});
+    }
+
+    try {
+        await pool.query('BEGIN');
+        const result = await pool.query(
+            'INSERT into documento (nome, cpf_usuario) values  ($1, $2) RETURNING *', 
+        [req.file.filename, cpf_usuario]);
+
+        await pool.query(
+            'INSERT INTO holerite (mes, ano, cpf_usuario, caminho_documento) VALUES ($1, $2, $3, $4)', 
+            [mes, ano, cpf_usuario, result.rows[0].caminho]);
+
+        await pool.query('COMMIT');
+
+        res.status(200).json({ message: 'Holerite cadastrado com sucesso.' });
+    } catch (error) {
+        await pool.query('ROLLBACK');
+
+        fs.unlink(path.join('uploads/', req.file.filename), (err) => {
+            if (err && err.code !== 'ENOENT') {
+                console.error('Erro ao excluir arquivo temporário:', err);
+            }
+        });
+
+        errorResponse(res, 500, 'Erro ao cadastrar holerite.', error.message);
     }
 });
 
@@ -219,17 +362,31 @@ router.delete('/admin/holerite/:cpf_usuario/:mes/:ano', autenticarToken, verific
 
     try {
         const result = await pool.query(
-            'DELETE FROM holerite WHERE cpf_usuario = $1 AND mes = $2 AND ano = $3', 
+            'DELETE FROM holerite WHERE cpf_usuario = $1 AND mes = $2 AND ano = $3 RETURNING *', 
             [cpf_usuario, mes, ano]
         );
         if (result.rowCount === 0) {
             return errorResponse(res, 404, 'Holerite não encontrado.');
         }
+
+        if(result.rows[0].caminho_documento){
+            const caminho = await pool.query(
+                'DELETE FROM documento WHERE caminho = $1 RETURNING *', [result.rows[0].caminho_documento]
+            );
+
+            fs.unlink(path.join('uploads/', caminho.rows[0].nome), (err) => {
+                if (err && err.code !== 'ENOENT') {  // Ignore "file not found" errors
+                    console.error('Erro ao excluir o arquivo:', err);
+                }
+            });
+        }
+
         res.status(200).json({ message: 'Holerite removido com sucesso.' });
     } catch (error) {
         errorResponse(res, 500, 'Erro ao remover holerite.', error.message);
     }
 });
+
 
 // Rotas: Testar autenticação para administrador
 router.get('/admin/testar-autenticacao', autenticarToken, verificarAdmin, (req, res) => {
@@ -351,8 +508,8 @@ router.delete('/admin/user/:cpf', autenticarToken, verificarAdmin, async (req, r
 
 // Rota: Listar holerites com filtro
 router.get('/clt/holerite', autenticarToken, verificarClt, async (req, res) => {
-    const { mes, ano} = req.query;
-    cpf_usuario = req.user.cpf;
+    const { mes, ano } = req.query;
+    const { cpf_usuario } = req.user;
 
     let query = 'SELECT mes, ano, cpf_usuario, caminho_documento FROM holerite';
     const params = [];
@@ -382,40 +539,10 @@ router.get('/clt/holerite', autenticarToken, verificarClt, async (req, res) => {
         errorResponse(res, 500, 'Erro ao listar holerites.', error.message);
     }
 });
-
-// Rotas: Testar autenticação para CLT
-router.get('/clt/testar-autenticacao', autenticarToken, verificarClt, (req, res) => {
-    res.json({ message: 'Autenticação válida para CLT.', user: req.user });
-});
-
-
-//<><><> Rotas PJ
-
-// Rotas: Testar autenticação para PJ
-router.get('/pj/testar-autenticacao', autenticarToken, verificarPj, (req, res) => {
-    res.json({ message: 'Autenticação válida para PJ.', user: req.user });
-});
-
-//<><><> Rota upload de arquivo
-
-router.post('/arquivo/upload', upload.single('file'), autenticarToken, async (req, res) => {
-    const {cpf_usuario} = req.body;
-    if(!req.file){
-        return res.status(413).json({error: 'File not uploaded'});
-    }
-    try{
-        const result = await pool.query("INSERT into documento (nome, cpf_usuario) values  ($1, $2)", [req.file.filename, cpf_usuario]);
-        return res.status(201).json({message: 'File uploaded sucessfully'});
-    }catch(error) {
-        errorResponse(res, 500, 'Erro ao inserir o documento no banco de dados', error.message);
-    }
-});
-
-
 //<><><> Listar documentos
 
 router.get('/arquivo/listar', autenticarToken, async (req, res) =>{
-    const {cpf_usuario} = req.body;
+    const { cpf_usuario } = req.user;
     
     try{
         const result = await pool.query('SELECT * FROM documento WHERE cpf_usuario = $1', [cpf_usuario]);
@@ -431,10 +558,10 @@ router.get('/arquivo/listar', autenticarToken, async (req, res) =>{
     }
 });
 
-//<><><> Download de arquivo baseado no id
-router.get("/arquivo/download/:caminho", async (req, res) => {
+//<><><> Download de arquivo baseado no caminho
+router.get("/arquivo/download/:caminho", autenticarToken, async (req, res) => {
     const { caminho } = req.params;
-    const {cpf_usuario } = req.body; 
+    const { cpf_usuario } = req.user; 
 
     try {
         const result = await pool.query("SELECT nome FROM documento WHERE cpf_usuario = $1 AND caminho = $2", [cpf_usuario, caminho]);
@@ -457,44 +584,103 @@ router.get("/arquivo/download/:caminho", async (req, res) => {
     }
 });
 
-
-router.post('/admin/notafiscal', autenticarToken, verificarAdmin, upload.single('file'), async (req, res) => {
-    const { mes, ano, cpf_usuario } = req.body;
-
-    if (!mes || !ano || !cpf_usuario || !req.file) {
-        return errorResponse(res, 400, 'Todos os campos são obrigatórios, incluindo o arquivo.');
-    }
-
-    try {
-        const caminho_documento = req.file.filename;
-
-        const result = await pool.query(
-            'INSERT INTO documento (nome, cpf_usuario) VALUES ($1, $2) RETURNING *', 
-            [req.file.filename, cpf_usuario]
-        );
-
-        await pool.query(
-            'INSERT INTO nota_fiscal (mes, ano, cpf_usuario, caminho_documento) VALUES ($1, $2, $3, $4)', 
-            [mes, ano, cpf_usuario, result.rows[0].caminho]
-        );
-
-        res.status(200).json({ message: 'Nota fiscal cadastrado com sucesso.' });
-    } catch (error) {
-        errorResponse(res, 500, 'Erro ao cadastrar nota fiscal.', error.message);
-    }
-});
-
-router.post('/user/ponto', autenticarToken, async (req, res) => {
-    const { cpf_usuario, entrada_saida } = req.body;
+router.post('/admin/clt/ponto', autenticarToken, verificarAdmin, async (req, res) => {
+    const { cpf_usuario, entrada_saida, horario } = req.body;
     if (!cpf_usuario) {
         return errorResponse(res, 400, 'Cpf obrigatório');
     }
 
     try {
+        const result = await pool.query('SELECT * FROM ponto WHERE cpf_usuario = $1 AND horario LIKE $2', [cpf_usuario, horario]);
+
+        if(result.rows.lenght > 0){
+            if(String(entrada_saida) === String(result.rows[0].entrada_saida)){
+               return errorResponse(res, 500, 'Erro ao registrar ponto, não é possível entrar/sair mais de uma vez por dia');
+            }
+        }
         await pool.query('INSERT INTO ponto (horario, cpf_usuario, entrada_saida) VALUES (now(), $1, $2)', [cpf_usuario, entrada_saida]);
-        res.status(200).json({ message: 'Ponto registrado com sucesso.' }); // Corrected message
+        res.status(200).json({ message: 'Ponto registrado com sucesso.' });
     } catch (error) {
-        errorResponse(res, 500, 'Erro ao registrar ponto.', error.message); // Adjusted error message
+        errorResponse(res, 500, 'Erro ao registrar ponto.', error.message); 
+    }
+});
+
+//ROTA LISTAR DO USUARIO PELO ADM
+router.get('/admin/clt/ponto', autenticarToken, verificarAdmin, async (req, res) => {
+    const { cpf_usuario } = req.body;
+    if (!cpf_usuario) {
+        return errorResponse(res, 400, 'Cpf obrigatório');
+    }
+    try {
+        const result = await pool.query('SELECT * FROM ponto WHERE cpf_usuario = $1', [cpf_usuario]);
+        res.status(200).json(result.rows);
+    } catch (error) {
+        errorResponse(res, 500, 'Erro ao deletar ponto.', error.message); 
+    }
+});
+
+
+//ROTA LISTAR DO USUARIO
+router.get('/clt/ponto', autenticarToken, async (req, res) => {
+    const { cpf_usuario } = req.user;
+    if (!cpf_usuario) {
+        return errorResponse(res, 400, 'Cpf obrigatório');
+    }
+    try {
+        const result = await pool.query('SELECT * FROM ponto WHERE cpf_usuario = $1', [cpf_usuario]);
+        res.status(200).json(result.rows);
+    } catch (error) {
+        errorResponse(res, 500, 'Erro ao deletar ponto.', error.message); 
+    }
+});
+
+
+
+
+
+router.post('/clt/ponto', autenticarToken, async (req, res) => {
+    const { entrada_saida } = req.body;
+    const { cpf_usuario } = req.user;
+
+    if (!cpf_usuario) {
+        return errorResponse(res, 400, 'Cpf obrigatório');
+    }
+
+    try {
+        
+        const result = await pool.query(
+            `SELECT entrada_saida FROM ponto 
+            WHERE cpf_usuario = $1 
+            AND ((horario AT TIME ZONE 'UTC') AT TIME ZONE 'America/Sao_Paulo')::DATE = (NOW() AT TIME ZONE 'America/Sao_Paulo')::DATE
+            ORDER BY horario ASC`,
+            [cpf_usuario]
+        );
+
+        console.log("Today's ponto entries:", result.rows); // Debug output
+
+        const entradas = result.rows.filter(row => row.entrada_saida === true).length;
+        const saidas = result.rows.filter(row => row.entrada_saida === false).length;
+
+        // Prevent duplicate clock-ins or clock-outs.
+        if (entrada_saida === true && entradas >= 1) {
+            return errorResponse(res, 400, 'Erro ao registrar ponto, você já fez entrada hoje.');
+        }
+        if (entrada_saida === false && saidas >= 1) {
+            return errorResponse(res, 400, 'Erro ao registrar ponto, você já fez saída hoje.');
+        }
+        if (entrada_saida === false && entradas === 0) {
+            return errorResponse(res, 400, 'Erro ao registrar ponto, você não pode sair antes de entrar.');
+        }
+
+        await pool.query(
+            "INSERT INTO ponto (horario, cpf_usuario, entrada_saida) VALUES (NOW() AT TIME ZONE 'UTC', $1, $2)",
+            [cpf_usuario, entrada_saida]
+        );
+
+        res.status(200).json({ message: 'Ponto registrado com sucesso.' });
+
+    } catch (error) {
+        return errorResponse(res, 500, 'Erro ao registrar ponto.', error.message);
     }
 });
 
