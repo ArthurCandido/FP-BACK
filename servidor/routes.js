@@ -439,6 +439,29 @@ router.post('/admin/user/list', autenticarToken, verificarAdmin, async (req, res
     }
 });
 
+// Rota: Alterar usuário e senha
+router.post('/admin/user/set', autenticarToken, verificarAdmin, async (req, res) => {
+    const {cpf, email, nome, tipo, senha } = req.body;
+
+    let query = `UPDATE usuario SET email = $2, nome = $3, tipo = $4 WHERE cpf = $1`;
+    let params = [cpf, email, nome, tipo];
+
+    if(senha){
+        query = `UPDATE usuario SET email = $2, nome = $3, tipo = $4, senha = $5 WHERE cpf = $1`;
+        params = [cpf, email, nome, tipo, cryptr.encrypt(senha)];
+    }
+
+    try {
+        const result = await pool.query(query, params);
+        if (result.rowCount === 0) {
+            return errorResponse(res, 404, 'Usuário não encontrado.');
+        }
+        res.status(200).json({ message: 'Usuário atualizado com sucesso.' });
+    } catch (error) {
+        errorResponse(res, 500, 'Erro ao atualizar usuário.', error.message);
+    }
+});
+
 // Rota: Listar usuários com filtro
 router.get('/admin/user', autenticarToken, verificarAdmin, async (req, res) => {
     const { cpf, email, tipo, nome } = req.query;
