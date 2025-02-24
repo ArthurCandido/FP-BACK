@@ -591,6 +591,29 @@ router.post('/admin/holerite/add', autenticarToken, verificarAdmin, upload.singl
     }
 });
 
+// Rota: Requisitar nota fiscal 
+router.post('/admin/nf/add', autenticarToken, verificarAdmin, async (req, res) => {
+    const {mes, ano, cpf } = req.body;
+
+    try {
+
+        let query = `INSERT INTO nota_fiscal(mes, ano, cpf_usuario, aprovado) VALUES($1,$2,$3,false)`;
+        let params = [mes, ano, cpf];
+
+        const result2 = await pool.query(query, params);
+        res.status(200).json({ message: 'Nota fiscal requisitada com sucesso.' });
+    } catch (error) {
+        console.log(error);
+        if (error.message.includes("duplicate key value violates unique constraint")) {
+            errorResponse(res, 500, 'Já existe uma nota fiscal para este funcionário neste mês/ano.', error.message);
+        }else if (error.message.includes("insert or update on table \"documento\" violates foreign key constraint \"documento_cpf_usuario_fkey\"")) {
+            errorResponse(res, 500, 'Não existe um funcionário com este CPF.', error.message);
+        }else{
+            errorResponse(res, 500, 'Erro ao adicionar nota fiscal.', error.message);
+        }
+    }
+});
+
 // Rota: Listar holerites com pesquisa e paginação
 router.post('/admin/holerite/list', autenticarToken, verificarAdmin, async (req, res) => {
     const { cpf_nome, ano, mes, pagina } = req.body;
@@ -629,6 +652,55 @@ router.post('/admin/holerite/list', autenticarToken, verificarAdmin, async (req,
         res.status(200).json(result.rows);
     } catch (error) {
         errorResponse(res, 500, 'Erro ao listar usuários.', error.message);
+    }
+});
+
+// Rota: Listar notas fiscais com pesquisa e paginação
+router.post('/admin/nf/list', autenticarToken, verificarAdmin, async (req, res) => {
+    const { cpf_nome, ano, mes, tipo, pagina } = req.body;
+
+    let query = `SELECT n.*, u.nome FROM nota_fiscal n JOIN usuario u ON n.cpf_usuario = u.cpf `;
+    const conditions = [];
+    let params = [limit, pagina * limit];
+
+    if(tipo == "requisitados"){
+        conditions.push('n.caminho_documento IS NULL');
+    }else if(tipo == "aprovados"){
+        conditions.push('n.caminho_documento IS NOT NULL and n.aprovado');
+    }else if(tipo == "em analise"){
+        conditions.push('n.caminho_documento IS NOT NULL and (not n.aprovado)');
+    }
+
+    if (cpf_nome) {
+        const regex = /^[0-9.\-]+$/;
+        if(regex.test(cpf_nome)){
+            conditions.push('u.cpf ILIKE $' + (params.length + 1));
+        }else{
+            conditions.push('u.nome ILIKE $' + (params.length + 1));
+        }
+        
+        params.push(`%${cpf_nome}%`);
+    }
+    if(ano){
+        conditions.push('n.ano = $' + (params.length + 1));
+        params.push(ano);
+    }
+    if (mes) {
+        conditions.push('n.mes = $' + (params.length + 1));
+        params.push(mes);
+    }
+
+    if (conditions.length > 0) {
+        query += ' WHERE ' + conditions.join(' AND ');
+    }
+
+    query += " ORDER BY n.ano DESC, n.mes DESC, u.nome LIMIT $1 OFFSET $2";
+
+    try {
+        const result = await pool.query(query, params);
+        res.status(200).json(result.rows);
+    } catch (error) {
+        errorResponse(res, 500, 'Erro ao listar notas fiscais.', error.message);
     }
 });
 
