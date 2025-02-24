@@ -812,6 +812,33 @@ router.post("/admin/holerite/dow", autenticarToken, verificarAdmin, async (req, 
     }
 });
 
+
+// Download de arquivo de holerite pelo clt
+router.post("/clt/holerite/dow", autenticarToken, verificarClt, async (req, res) => {
+    const { mes, ano } = req.body;
+    const { cpf } = req.user;
+
+    try {
+        const result = await pool.query("SELECT d.nome FROM documento d JOIN holerite h ON d.caminho = h.caminho_documento WHERE h.cpf_usuario = $1 AND h.mes = $2 AND h.ano = $3", [cpf, mes, ano]);
+
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "No file found for this user" });
+        }
+
+        const filename = result.rows[0].nome;
+        const filePath = path.join(__dirname, "uploads", filename);
+
+        res.download(filePath, filename, (err) => {
+            if (err) {
+                res.status(500).json({ error: "Error downloading file" });
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ error: "Database error", details: error.message });
+    }
+});
+
 // Download de arquivo da nota fiscal pelo pj
 router.post("/pj/nf/dow", autenticarToken, verificarPj, async (req, res) => {
     const { mes, ano } = req.body;
@@ -901,6 +928,38 @@ router.post('/pj/nf/list', autenticarToken, verificarPj, async (req, res) => {
         res.status(200).json(result.rows);
     } catch (error) {
         errorResponse(res, 500, 'Erro ao listar notas fiscais.', error.message);
+    }
+});
+
+// Rota: Listar holerites com pesquisa e paginação do clt
+router.post('/clt/holerite/list', autenticarToken, verificarClt, async (req, res) => {
+    const { ano, mes, pagina } = req.body;
+    const { cpf } = req.user;
+
+    let query = `SELECT h.*, u.nome FROM holerite h JOIN usuario u ON h.cpf_usuario = u.cpf `;
+    const conditions = ["u.cpf = $3"];
+    let params = [limit, pagina * limit, cpf];
+
+    if(ano){
+        conditions.push('h.ano = $' + (params.length + 1));
+        params.push(ano);
+    }
+    if (mes) {
+        conditions.push('h.mes = $' + (params.length + 1));
+        params.push(mes);
+    }
+
+    if (conditions.length > 0) {
+        query += ' WHERE ' + conditions.join(' AND ');
+    }
+
+    query += " ORDER BY h.ano DESC, h.mes DESC, u.nome LIMIT $1 OFFSET $2";
+
+    try {
+        const result = await pool.query(query, params);
+        res.status(200).json(result.rows);
+    } catch (error) {
+        errorResponse(res, 500, 'Erro ao listar usuários.', error.message);
     }
 });
 
