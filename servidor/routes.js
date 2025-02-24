@@ -96,7 +96,7 @@ router.post('/user/autenticar', async (req, res) => {
             return errorResponse(res, 401, 'Credenciais inválidas.');
         }
 
-        const token = jwt.sign({ cpf_usuario: rows[0].cpf, tipo: rows[0].tipo }, JWT_SECRET, { expiresIn: '1h' });
+        const token = jwt.sign({ cpf: rows[0].cpf, tipo: rows[0].tipo }, JWT_SECRET, { expiresIn: '1h' });
         
         res.status(200).json({
             message: 'Autenticado com sucesso.',
@@ -588,6 +588,47 @@ router.post('/admin/holerite/add', autenticarToken, verificarAdmin, upload.singl
         }else{
             errorResponse(res, 500, 'Erro ao adicionar holerite.', error.message);
         }
+    }
+});
+
+// Rota: Listar holerites com pesquisa e paginação
+router.post('/admin/holerite/list', autenticarToken, verificarAdmin, async (req, res) => {
+    const { cpf_nome, ano, mes, pagina } = req.body;
+
+    let query = `SELECT h.*, u.nome FROM holerite h JOIN usuario u ON h.cpf_usuario = u.cpf `;
+    const conditions = [];
+    let params = [limit, pagina * limit];
+
+    if (cpf_nome) {
+        const regex = /^[0-9.\-]+$/;
+        if(regex.test(cpf_nome)){
+            conditions.push('u.cpf ILIKE $' + (params.length + 1));
+        }else{
+            conditions.push('u.nome ILIKE $' + (params.length + 1));
+        }
+        
+        params.push(`%${cpf_nome}%`);
+    }
+    if(ano){
+        conditions.push('h.ano = $' + (params.length + 1));
+        params.push(ano);
+    }
+    if (mes) {
+        conditions.push('h.mes = $' + (params.length + 1));
+        params.push(mes);
+    }
+
+    if (conditions.length > 0) {
+        query += ' WHERE ' + conditions.join(' AND ');
+    }
+
+    query += " ORDER BY h.ano DESC, h.mes DESC, u.nome LIMIT $1 OFFSET $2";
+
+    try {
+        const result = await pool.query(query, params);
+        res.status(200).json(result.rows);
+    } catch (error) {
+        errorResponse(res, 500, 'Erro ao listar usuários.', error.message);
     }
 });
 
