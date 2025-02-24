@@ -632,6 +632,95 @@ router.post('/admin/holerite/list', autenticarToken, verificarAdmin, async (req,
     }
 });
 
+// Rota: Alterar arquivo do holerite
+router.post('/admin/holerite/set', autenticarToken, verificarAdmin, upload.single('file'), async (req, res) => {
+    const {mes, ano, cpf } = req.body;
+
+    if(!req.file){
+        errorResponse(res, 500, 'Arquivo não enviado.', error.message);
+    }
+
+    try {
+        const result1 = await pool.query("INSERT into documento (nome, cpf_usuario) values  ($1, $2) RETURNING * ", [req.file.filename, cpf] );
+
+        let query = `UPDATE holerite SET caminho_documento = $4 WHERE mes = $1 and ano = $2 and cpf_usuario = $3`;
+        let params = [mes, ano, cpf, result1.rows[0].caminho];
+
+        const result2 = await pool.query(query, params);
+        res.status(200).json({ message: 'Holerite alterado com sucesso.' });
+    } catch (error) {
+        console.log(error);
+        errorResponse(res, 500, 'Erro ao adicionar holerite.', error.message);
+    }
+});
+
+// Rota: Deletar holerite
+router.post('/admin/holerite/del', autenticarToken, verificarAdmin, async (req, res) => {
+    const { cpf, mes, ano } = req.body;
+
+    try {
+        const result = await pool.query(
+            'DELETE FROM holerite WHERE cpf_usuario = $1 AND mes = $2 AND ano = $3 RETURNING *', 
+            [cpf, mes, ano]
+        );
+        if (result.rowCount === 0) {
+            return errorResponse(res, 404, 'Holerite não encontrado.');
+        }
+
+        res.status(200).json({ message: 'Holerite removido com sucesso.' });
+    } catch (error) {
+        errorResponse(res, 500, 'Erro ao remover holerite.', error.message);
+    }
+});
+
+// Rota: Remover holerite
+router.post('/admin/holerite/del', autenticarToken, verificarAdmin, async (req, res) => {
+    const { cpf, mes, ano } = req.body;
+
+    try {
+        const result = await pool.query(
+            'DELETE FROM holerite WHERE cpf_usuario = $1 AND mes = $2 AND ano = $3 RETURNING *', 
+            [cpf, mes, ano]
+        );
+        if (result.rowCount === 0) {
+            return errorResponse(res, 404, 'Holerite não encontrado.');
+        }
+
+        res.status(200).json({ message: 'Holerite removido com sucesso.' });
+    } catch (error) {
+        errorResponse(res, 500, 'Erro ao remover holerite.', error.message);
+    }
+});
+
+//<><><> Download de arquivo de holerite
+router.post("/admin/holerite/dow", autenticarToken, async (req, res) => {
+    console.log("Dow");
+
+    const { cpf, mes, ano } = req.body;
+
+    try {
+        const result = await pool.query("SELECT d.nome FROM documento d JOIN holerite h ON documento.caminho = h.caminho_documeno WHERE h.cpf_usuario = $1 AND h.mes = $2 AND h.ano = $3", [cpf_usuario, mes, ano]);
+
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "No file found for this user" });
+        }
+
+        const filename = result.rows[0].nome;
+        const filePath = path.join(__dirname, "uploads", filename);
+
+        res.download(filePath, filename, (err) => {
+            if (err) {
+                res.status(500).json({ error: "Error downloading file" });
+            }
+        });
+
+        console.log("A");
+    } catch (error) {
+        res.status(500).json({ error: "Database error", details: error.message });
+    }
+});
+
 // <<</LUGUI>>>
 
 // Rota: Listar usuários com filtro
