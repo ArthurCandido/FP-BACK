@@ -120,7 +120,7 @@ router.post('/user/autenticaremail', async (req, res) => {
             return errorResponse(res, 401, 'Credenciais inválidas.');
         }
 
-        const token = jwt.sign({ cpf: rows[0].cpf, tipo: rows[0].tipo }, JWT_SECRET, { expiresIn: '1h' });
+        const token = jwt.sign({ cpf_usuario: rows[0].cpf, tipo: rows[0].tipo }, JWT_SECRET, { expiresIn: '1h' });
         
         res.status(200).json({
             message: 'Autenticado com sucesso.',
@@ -197,11 +197,11 @@ router.put('/admin/holerite/', autenticarToken, verificarAdmin, upload.single('f
     }
 
     if(mes > 12 || mes < 1){
-        return errorResponse(res, 400, 'O mes deve ser menor que 12 e maior que 1');
+        return errorResponse(res, 400, 'O mes deve estar entre 12 e 1');
     }
 
     if(ano > 2100 || ano < 1960){
-        return errorResponse(res, 400, 'O ano deve ser acima de 1960 e menor que 2100')
+        return errorResponse(res, 400, 'O ano deve estar entre 1960 e 2100')
     }
  
     if(!req.file){
@@ -269,11 +269,11 @@ router.post('/admin/notafiscal', autenticarToken, verificarAdmin, async (req, re
     }
 
     if(mes > 12 || mes < 1){
-        return errorResponse(res, 400, 'O mes deve ser menor que 12 e maior que 1');
+        return errorResponse(res, 400, 'O mes deve estar entre 12 e 1');
     }
 
     if(ano > 2100 || ano < 1960){
-        return errorResponse(res, 400, 'O ano deve ser acima de 1960 e menor que 2100');
+        return errorResponse(res, 400, 'O ano deve estar entre 1960 e 2100');
     }
 
     try{
@@ -308,6 +308,7 @@ router.get('/pj/notafiscal/requisitadas', autenticarToken, verificarPj, async (r
 
 });
 
+//notas fiscais preenchidas
 router.get('/pj/notafiscal/preenchidas', autenticarToken, verificarPj, async (req, res) =>{
     const { cpf_usuario } = req.user;
 
@@ -327,15 +328,12 @@ router.get('/pj/notafiscal/preenchidas', autenticarToken, verificarPj, async (re
 });
 
 //ver notas fiscais ADM
-router.get('/admin/notafiscal/:cpf_usuario', autenticarToken, verificarAdmin, async (req, res) =>{
+router.get('/admin/notafiscal/', autenticarToken, verificarAdmin, async (req, res) =>{
     const { cpf_usuario } = req.params;
 
     try{
 
-        const result = await pool.query(
-          'SELECT * FROM requisicaoNF WHERE cpf_usuario = $1',
-           [cpf_usuario]
-        );
+        const result = await pool.query('SELECT * FROM requisicaoNF');
 
         return res.status(200).json(result.rows);
 
@@ -355,11 +353,11 @@ router.post('/pj/notafiscal', autenticarToken, verificarPj, upload.single('file'
     }
 
     if(mes > 12 || mes < 1){
-        return errorResponse(res, 400, 'O mes deve ser menor que 12 e maior que 1');
+        return errorResponse(res, 400, 'O mes deve estar entre 12 e 1');
     }
 
     if(ano > 2100 || ano < 1960){
-        return errorResponse(res, 400, 'O ano deve ser acima de 1960 e menor que 2100');
+        return errorResponse(res, 400, 'O ano deve estar entre 1960 e 2100');
     }
  
     if(!req.file){
@@ -409,6 +407,47 @@ router.post('/pj/notafiscal', autenticarToken, verificarPj, upload.single('file'
     }
 });
 
+//Download da nota fiscal
+router.get("/admin/notafiscal/download/:cpf_usuario/:mes/:ano", autenticarToken, verificarAdmin, async (req, res) => {
+    const { cpf_usuario, mes, ano } = req.params;
+
+    try {
+        // Fetch the document path based on the provided CPF, month, and year
+        const result = await pool.query(
+            "SELECT caminho_documento FROM nota_fiscal WHERE cpf_usuario = $1 AND mes = $2 AND ano = $3", 
+            [cpf_usuario, mes, ano]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "No file found for this user" });
+        }
+
+        // Fetch the file name based on the document path
+        const download = await pool.query(
+            "SELECT * FROM documento WHERE caminho = $1", 
+            [result.rows[0].caminho_documento]
+        );
+
+        if (download.rows.length === 0) {
+            return res.status(404).json({ error: "Document not found" });
+        }
+
+        const filename = download.rows[0].nome;
+        const filePath = path.join(__dirname, "uploads", filename); // Ensure 'uploads' folder exists
+
+        // Check if the file exists before trying to download it
+        res.download(filePath, filename, (err) => {
+            if (err) {
+                console.error("Download error:", err);
+                return res.status(500).json({ error: "Error downloading file" });
+            }
+        });
+    } catch (error) {
+        console.error("Database error:", error);
+        res.status(500).json({ error: "Database error", details: error.message });
+    }
+});
+
 // Rota: Cadastrar holerite
 router.post('/admin/holerite', autenticarToken, verificarAdmin, upload.single('file'), async (req, res) => {
     const { mes, ano, cpf_usuario } = req.body;
@@ -418,11 +457,11 @@ router.post('/admin/holerite', autenticarToken, verificarAdmin, upload.single('f
     }
 
     if(mes > 12 || mes < 1){
-        return errorResponse(res, 400, 'O mes deve ser menor que 12 e maior que 1');
+        return errorResponse(res, 400, 'O mes deve estar entre 12 e 1');
     }
 
     if(ano > 2100 || ano < 1960){
-        return errorResponse(res, 400, 'O ano deve ser acima de 1960 e menor que 2100')
+        return errorResponse(res, 400, 'O ano deve estar entre 1960 e 2100')
     }
 
     if(!req.file){
@@ -690,7 +729,7 @@ router.post('/admin/clt/ponto', autenticarToken, verificarAdmin, async (req, res
     }
 
     try {
-        const result = await pool.query('SELECT * FROM ponto WHERE cpf_usuario = $1 AND horario LIKE $2', [cpf_usuario, horario]);
+        const result = await pool.query('SELECT * FROM ponto WHERE cpf_usuario = $1', [cpf_usuario, horario]);
 
         if(result.rows.lenght > 0){
             if(String(entrada_saida) === String(result.rows[0].entrada_saida)){
@@ -720,7 +759,7 @@ router.get('/admin/clt/ponto/:cpf_usuario', autenticarToken, verificarAdmin, asy
 
 
 //ROTA LISTAR DO USUARIO
-router.get('/clt/ponto', autenticarToken, async (req, res) => {
+router.get('/clt/ponto', autenticarToken, verificarClt, async (req, res) => {
     const { cpf_usuario } = req.user;
     if (!cpf_usuario) {
         return errorResponse(res, 400, 'Cpf obrigatório');
@@ -733,48 +772,54 @@ router.get('/clt/ponto', autenticarToken, async (req, res) => {
     }
 });
 
+
 router.post('/clt/ponto', autenticarToken, async (req, res) => {
-    const { entrada_saida } = req.body;
     const { cpf_usuario } = req.user;
 
     if (!cpf_usuario) {
-        return errorResponse(res, 400, 'Cpf obrigatório');
+        return errorResponse(res, 400, 'CPF obrigatório.');
     }
 
     try {
-        
+        // Get the last punch for today
         const result = await pool.query(
             `SELECT entrada_saida FROM ponto 
             WHERE cpf_usuario = $1 
-            AND ((horario AT TIME ZONE 'UTC') AT TIME ZONE 'America/Sao_Paulo')::DATE = (NOW() AT TIME ZONE 'America/Sao_Paulo')::DATE
-            ORDER BY horario ASC`,
+            AND horario::DATE = (NOW() AT TIME ZONE 'America/Sao_Paulo')::DATE
+            ORDER BY horario DESC 
+            LIMIT 1`,
             [cpf_usuario]
         );
 
-        console.log("Today's ponto entries:", result.rows); // Debug output
+        console.log("Último registro:", result.rows);
 
-        const entradas = result.rows.filter(row => row.entrada_saida === true).length;
-        const saidas = result.rows.filter(row => row.entrada_saida === false).length;
-
-        // Prevent duplicate clock-ins or clock-outs.
-        if (entrada_saida === true && entradas >= 1) {
-            return errorResponse(res, 400, 'Erro ao registrar ponto, você já fez entrada hoje.');
-        }
-        if (entrada_saida === false && saidas >= 1) {
-            return errorResponse(res, 400, 'Erro ao registrar ponto, você já fez saída hoje.');
-        }
-        if (entrada_saida === false && entradas === 0) {
-            return errorResponse(res, 400, 'Erro ao registrar ponto, você não pode sair antes de entrar.');
+        if (result.rows.length === 0) {
+            // First punch of the day (Entrada)
+            await pool.query(
+                `INSERT INTO ponto (horario, cpf_usuario, entrada_saida) 
+                 VALUES (NOW() - interval '3 hours', $1, TRUE)`,
+                [cpf_usuario]
+            );
+            return res.status(200).json({ message: 'Ponto registrado como ENTRADA.' });
         }
 
-        await pool.query(
-            "INSERT INTO ponto (horario, cpf_usuario, entrada_saida) VALUES (NOW() AT TIME ZONE 'UTC', $1, $2)",
-            [cpf_usuario, entrada_saida]
-        );
+        const lastPunch = result.rows[0].entrada_saida;
 
-        res.status(200).json({ message: 'Ponto registrado com sucesso.' });
+        if (lastPunch === true) {
+            // Last was an entry, now register an exit (Saída)
+            await pool.query(
+                `INSERT INTO ponto (horario, cpf_usuario, entrada_saida) 
+                 VALUES (NOW() - interval '3 hours', $1, FALSE)`,
+                [cpf_usuario]
+            );
+            return res.status(200).json({ message: 'Ponto registrado como SAÍDA.' });
+        } else {
+            // Last was already an exit, prevent duplicate exit
+            return errorResponse(res, 400, 'Erro: Você já registrou saída hoje.');
+        }
 
     } catch (error) {
+        console.error("Erro ao registrar ponto:", error);
         return errorResponse(res, 500, 'Erro ao registrar ponto.', error.message);
     }
 });
