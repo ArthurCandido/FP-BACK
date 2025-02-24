@@ -726,6 +726,29 @@ router.post('/admin/holerite/set', autenticarToken, verificarAdmin, upload.singl
     }
 });
 
+// Rota: Adicionar arquivo a nota fiscal
+router.post('/pj/nf/set', autenticarToken, verificarPj, upload.single('file'), async (req, res) => {
+    const {mes, ano } = req.body;
+    const { cpf } = req.user;
+
+    if(!req.file){
+        errorResponse(res, 500, 'Arquivo não enviado.', error.message);
+    }
+
+    try {
+        const result1 = await pool.query("INSERT into documento (nome, cpf_usuario) values  ($1, $2) RETURNING * ", [req.file.filename, cpf] );
+
+        let query = `UPDATE nota_fiscal SET caminho_documento = $4 WHERE mes = $1 and ano = $2 and cpf_usuario = $3`;
+        let params = [mes, ano, cpf, result1.rows[0].caminho];
+
+        const result2 = await pool.query(query, params);
+        res.status(200).json({ message: 'Nota fiscal alterada com sucesso.' });
+    } catch (error) {
+        console.log(error);
+        errorResponse(res, 500, 'Erro ao alterar nota fiscal.', error.message);
+    }
+});
+
 // Rota: Deletar holerite
 router.post('/admin/holerite/del', autenticarToken, verificarAdmin, async (req, res) => {
     const { cpf, mes, ano } = req.body;
@@ -764,8 +787,8 @@ router.post('/admin/holerite/del', autenticarToken, verificarAdmin, async (req, 
     }
 });
 
-//<><><> Download de arquivo de holerite
-router.post("/admin/holerite/dow", autenticarToken, async (req, res) => {
+// Download de arquivo de holerite
+router.post("/admin/holerite/dow", autenticarToken, verificarAdmin, async (req, res) => {
     const { cpf, mes, ano } = req.body;
 
     try {
@@ -786,6 +809,98 @@ router.post("/admin/holerite/dow", autenticarToken, async (req, res) => {
         });
     } catch (error) {
         res.status(500).json({ error: "Database error", details: error.message });
+    }
+});
+
+// Download de arquivo da nota fiscal pelo pj
+router.post("/pj/nf/dow", autenticarToken, verificarPj, async (req, res) => {
+    const { mes, ano } = req.body;
+    const { cpf } = req.user;
+
+    try {
+        const result = await pool.query("SELECT d.nome FROM documento d JOIN nota_fiscal h ON d.caminho = h.caminho_documento WHERE h.cpf_usuario = $1 AND h.mes = $2 AND h.ano = $3", [cpf, mes, ano]);
+
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "No file found for this user" });
+        }
+
+        const filename = result.rows[0].nome;
+        const filePath = path.join(__dirname, "uploads", filename);
+
+        res.download(filePath, filename, (err) => {
+            if (err) {
+                res.status(500).json({ error: "Error downloading file" });
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ error: "Database error", details: error.message });
+    }
+});
+
+// Download de arquivo da nota fiscal pelo admin
+router.post("/admin/nf/dow", autenticarToken, verificarAdmin, async (req, res) => {
+    const { cpf, mes, ano } = req.body;
+
+    try {
+        const result = await pool.query("SELECT d.nome FROM documento d JOIN nota_fiscal h ON d.caminho = h.caminho_documento WHERE h.cpf_usuario = $1 AND h.mes = $2 AND h.ano = $3", [cpf, mes, ano]);
+
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "No file found for this user" });
+        }
+
+        const filename = result.rows[0].nome;
+        const filePath = path.join(__dirname, "uploads", filename);
+
+        res.download(filePath, filename, (err) => {
+            if (err) {
+                res.status(500).json({ error: "Error downloading file" });
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ error: "Database error", details: error.message });
+    }
+});
+
+
+// Rota: Listar notas fiscais próprias com pesquisa e paginação
+router.post('/pj/nf/list', autenticarToken, verificarPj, async (req, res) => {
+    const {ano, mes, tipo, pagina } = req.body;
+    const { cpf } = req.user;
+
+    let query = `SELECT n.*, u.nome FROM nota_fiscal n JOIN usuario u ON n.cpf_usuario = u.cpf `;
+    const conditions = ["n.cpf_usuario = $3"];
+    let params = [limit, pagina * limit, cpf];
+
+    if(tipo == "requisitados"){
+        conditions.push('n.caminho_documento IS NULL');
+    }else if(tipo == "aprovados"){
+        conditions.push('n.caminho_documento IS NOT NULL and n.aprovado');
+    }else if(tipo == "em analise"){
+        conditions.push('n.caminho_documento IS NOT NULL and (not n.aprovado)');
+    }
+
+    if(ano){
+        conditions.push('n.ano = $' + (params.length + 1));
+        params.push(ano);
+    }
+    if (mes) {
+        conditions.push('n.mes = $' + (params.length + 1));
+        params.push(mes);
+    }
+
+    if (conditions.length > 0) {
+        query += ' WHERE ' + conditions.join(' AND ');
+    }
+
+    query += " ORDER BY n.ano DESC, n.mes DESC, u.nome LIMIT $1 OFFSET $2";
+
+    try {
+        const result = await pool.query(query, params);
+        res.status(200).json(result.rows);
+    } catch (error) {
+        errorResponse(res, 500, 'Erro ao listar notas fiscais.', error.message);
     }
 });
 
