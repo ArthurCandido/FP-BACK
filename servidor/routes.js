@@ -1215,12 +1215,12 @@ router.get('/admin/clt/ponto/:cpf_usuario', autenticarToken, verificarAdmin, asy
 
 //ROTA LISTAR DO USUARIO
 router.get('/clt/ponto', autenticarToken, verificarClt, async (req, res) => {
-    const { cpf_usuario } = req.user;
-    if (!cpf_usuario) {
+    const { cpf } = req.user;
+    if (!cpf) {
         return errorResponse(res, 400, 'Cpf obrigatório');
     }
     try {
-        const result = await pool.query('SELECT * FROM ponto WHERE cpf_usuario = $1', [cpf_usuario]);
+        const result = await pool.query('SELECT * FROM ponto WHERE cpf_usuario = $1', [cpf]);
         res.status(200).json(result.rows);
     } catch (error) {
         errorResponse(res, 500, 'Erro ao deletar ponto.', error.message); 
@@ -1228,10 +1228,14 @@ router.get('/clt/ponto', autenticarToken, verificarClt, async (req, res) => {
 });
 
 
-router.post('/clt/ponto', autenticarToken, async (req, res) => {
-    const { cpf_usuario } = req.user;
+router.post('/clt/ponto', autenticarToken, verificarClt, async (req, res) => {
+    const { cpf } = req.user;
 
-    if (!cpf_usuario) {
+
+    console.log("AQUI");
+    console.log(cpf);
+
+    if (!cpf) {
         return errorResponse(res, 400, 'CPF obrigatório.');
     }
 
@@ -1243,7 +1247,7 @@ router.post('/clt/ponto', autenticarToken, async (req, res) => {
             AND horario::DATE = (NOW() AT TIME ZONE 'America/Sao_Paulo')::DATE
             ORDER BY horario DESC 
             LIMIT 1`,
-            [cpf_usuario]
+            [cpf]
         );
 
         console.log("Último registro:", result.rows);
@@ -1253,7 +1257,7 @@ router.post('/clt/ponto', autenticarToken, async (req, res) => {
             await pool.query(
                 `INSERT INTO ponto (horario, cpf_usuario, entrada_saida) 
                  VALUES (NOW() - interval '3 hours', $1, TRUE)`,
-                [cpf_usuario]
+                [cpf]
             );
             return res.status(200).json({ message: 'Ponto registrado como ENTRADA.' });
         }
@@ -1265,7 +1269,7 @@ router.post('/clt/ponto', autenticarToken, async (req, res) => {
             await pool.query(
                 `INSERT INTO ponto (horario, cpf_usuario, entrada_saida) 
                  VALUES (NOW() - interval '3 hours', $1, FALSE)`,
-                [cpf_usuario]
+                [cpf]
             );
             return res.status(200).json({ message: 'Ponto registrado como SAÍDA.' });
         } else {
