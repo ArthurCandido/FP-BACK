@@ -262,16 +262,16 @@ router.post('/admin/user', autenticarToken, verificarAdmin, async (req, res) => 
 router.post('/admin/user/list', autenticarToken, verificarAdmin, async (req, res) => {
     const { cpf_nome, pagina } = req.body;
 
-    let query = `SELECT cpf, email, tipo, nome FROM usuario LIMIT $1 OFFSET $2`;
+    let query = `SELECT cpf, email, tipo, nome FROM usuario ORDER BY nome LIMIT $1 OFFSET $2`;
     let params = [limit, pagina * limit];
 
     if (cpf_nome) {
         const regex = /^[0-9.\-]+$/;
         if(regex.test(cpf_nome)){
-            query = `SELECT cpf, email, tipo, nome FROM usuario WHERE cpf ILIKE $3 LIMIT $1 OFFSET $2`;
+            query = `SELECT cpf, email, tipo, nome FROM usuario WHERE cpf ILIKE $3 ORDER BY nome LIMIT $1 OFFSET $2`;
             params = [limit, pagina * limit, `%${cpf_nome}%`];
         }else{
-            query = `SELECT cpf, email, tipo, nome FROM usuario WHERE nome ILIKE $3 LIMIT $1 OFFSET $2`;
+            query = `SELECT cpf, email, tipo, nome FROM usuario WHERE nome ILIKE $3 ORDER BY nome LIMIT $1 OFFSET $2`;
             params = [limit, pagina * limit, `%${cpf_nome}%`];
         }
     }
