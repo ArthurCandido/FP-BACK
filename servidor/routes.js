@@ -55,7 +55,7 @@ const verificarPj = (req, res, next) => {
     next();
 };
 
-//<><><> Rotas Dev
+//<><><> Rotas Dev <<<DEV>>>
 
 // Rota: Cadastrar usuário
 router.post('/dev/user', async (req, res) => {
@@ -74,7 +74,7 @@ router.post('/dev/user', async (req, res) => {
     }
 });
 
-//<><><> Rotas usuário
+//<><><> Rotas usuário <<<USER>>>
 
 // Rota: Desautenticar usuário
 router.post('/user/desautenticar', autenticarToken, (req, res) => {
@@ -139,7 +139,7 @@ router.get('/user/testar-autenticacao', autenticarToken, (req, res) => {
     res.json({ message: 'Autenticação válida.', user: req.user });
 });
 
-//<><><> Rotas administrador
+//<><><> Rotas administrador <<<ADMIN>>>
 
 // Rotas: Testar autenticação para CLT
 router.get('/clt/testar-autenticacao', autenticarToken, verificarClt, (req, res) => {
@@ -512,6 +512,8 @@ router.post('/admin/user', autenticarToken, verificarAdmin, async (req, res) => 
     }
 });
 
+// <<<LUGUI>>>
+
 // Rota: Listar usuários com pesquisa e paginação
 router.post('/admin/user/list', autenticarToken, verificarAdmin, async (req, res) => {
     const { cpf_nome, pagina } = req.body;
@@ -560,6 +562,36 @@ router.post('/admin/user/set', autenticarToken, verificarAdmin, async (req, res)
         errorResponse(res, 500, 'Erro ao atualizar usuário.', error.message);
     }
 });
+
+// Rota: Adiconar holerite com arquivo
+router.post('/admin/holerite/add', autenticarToken, verificarAdmin, upload.single('file'), async (req, res) => {
+    const {mes, ano, cpf } = req.body;
+
+    if(!req.file){
+        errorResponse(res, 500, 'Arquivo não enviado.', error.message);
+    }
+
+    try {
+        const result1 = await pool.query("INSERT into documento (nome, cpf_usuario) values  ($1, $2) RETURNING * ", [req.file.filename, cpf] );
+
+        let query = `INSERT INTO holerite(mes, ano, cpf_usuario, caminho_documento) VALUES($1,$2,$3,$4)`;
+        let params = [mes, ano, cpf, result1.rows[0].caminho];
+
+        const result2 = await pool.query(query, params);
+        res.status(200).json({ message: 'Holerite adicionado com sucesso.' });
+    } catch (error) {
+        console.log(error);
+        if (error.message.includes("duplicate key value violates unique constraint")) {
+            errorResponse(res, 500, 'Já existe um holerite para este funcionário neste mês/ano.', error.message);
+        }else if (error.message.includes("insert or update on table \"documento\" violates foreign key constraint \"documento_cpf_usuario_fkey\"")) {
+            errorResponse(res, 500, 'Não existe um funcionário com este CPF.', error.message);
+        }else{
+            errorResponse(res, 500, 'Erro ao adicionar holerite.', error.message);
+        }
+    }
+});
+
+// <<</LUGUI>>>
 
 // Rota: Listar usuários com filtro
 router.get('/admin/user', autenticarToken, verificarAdmin, async (req, res) => {
