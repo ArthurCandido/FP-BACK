@@ -262,6 +262,91 @@ router.put('/admin/holerite/', autenticarToken, verificarAdmin, upload.single('f
 });
 
 
+//PEDIR NOTA FISCAL
+router.post('/admin/notafiscal', autenticarToken, verificarAdmin, async (req, res) =>{
+    const { mes, ano, cpf_usuario } = req.body;
+
+    if (!mes || !ano || !cpf_usuario) {
+        return errorResponse(res, 400, 'Todos os campos são obrigatórios');
+    }
+
+    if(mes > 12 || mes < 1){
+        return errorResponse(res, 400, 'O mes deve ser menor que 12 e maior que 1');
+    }
+
+    if(ano > 2100 || ano < 1960){
+        return errorResponse(res, 400, 'O ano deve ser acima de 1960 e menor que 2100');
+    }
+
+    try{
+        await pool.query(
+          'INSERT INTO requisicaoNF (mes, ano, cpf_usuario, preenchida) VALUES ($1, $2, $3, false)',
+           [mes, ano, cpf_usuario]
+        );
+
+        return res.status(200).json({ message: 'Nota fiscal pedida com sucesso.' });
+
+    }catch(error){
+        return errorResponse(res, 500, 'Erro ao pedir nota fiscal.', error.message);
+    }
+
+});
+
+//Ver as notas ficais requisitadas
+router.get('/pj/notafiscal/requisitadas', autenticarToken, verificarPj, async (req, res) =>{
+    const { cpf_usuario } = req.user;
+
+    try{
+        const result = await pool.query(
+          'SELECT * FROM requisicaoNF WHERE cpf_usuario = $1 AND preenchida = false',
+           [cpf_usuario]
+        );
+
+        return res.status(200).json(result.rows);
+
+    }catch(error){
+        return errorResponse(res, 500, 'Erro ao pedir nota fiscal.', error.message);
+    }
+
+});
+
+router.get('/pj/notafiscal/preenchidas', autenticarToken, verificarPj, async (req, res) =>{
+    const { cpf_usuario } = req.user;
+
+    try{
+
+        const result = await pool.query(
+          'SELECT * FROM requisicaoNF WHERE cpf_usuario = $1 AND preenchida = true',
+           [cpf_usuario]
+        );
+
+        return res.status(200).json(result.rows);
+
+    }catch(error){
+        return errorResponse(res, 500, 'Erro ao pedir nota fiscal.', error.message);
+    }
+
+});
+
+//ver notas fiscais ADM
+router.get('/admin/notafiscal/:cpf_usuario', autenticarToken, verificarAdmin, async (req, res) =>{
+    const { cpf_usuario } = req.params;
+
+    try{
+
+        const result = await pool.query(
+          'SELECT * FROM requisicaoNF WHERE cpf_usuario = $1',
+           [cpf_usuario]
+        );
+
+        return res.status(200).json(result.rows);
+
+    }catch(error){
+        return errorResponse(res, 500, 'Erro ao pedir nota fiscal.', error.message);
+    }
+
+});
+
 //CADASTRAR NOTAFISCAL
 router.post('/pj/notafiscal', autenticarToken, verificarPj, upload.single('file'), async (req, res) => {
     const { mes, ano } = req.body;
@@ -276,7 +361,7 @@ router.post('/pj/notafiscal', autenticarToken, verificarPj, upload.single('file'
     }
 
     if(ano > 2100 || ano < 1960){
-        return errorResponse(res, 400, 'O ano deve ser acima de 1960 e menor que 2100')
+        return errorResponse(res, 400, 'O ano deve ser acima de 1960 e menor que 2100');
     }
  
     if(!req.file){
@@ -285,16 +370,30 @@ router.post('/pj/notafiscal', autenticarToken, verificarPj, upload.single('file'
 
     try {
         await pool.query('BEGIN');
-        const result = await pool.query(
+
+        const first = await pool.query(
+            'UPDATE requisicaoNF SET preenchida = true WHERE mes = $1 AND ano = $2 AND cpf_usuario = $3 RETURNING *', 
+            [mes, ano, cpf_usuario]
+        );
+
+        if(first.rowCount == 0){
+            fs.unlink(path.join('uploads/', req.file.filename), (err) => {
+                if (err && err.code !== 'ENOENT') {
+                    console.error('Erro ao excluir arquivo temporário:', err);
+                }
+            });
+            return errorResponse(res, 400, 'Essa nota fiscal nao existe');
+        }
+        const result =  await pool.query(
             'INSERT INTO documento (nome, cpf_usuario) VALUES ($1, $2) RETURNING *', 
             [req.file.filename, cpf_usuario]
         );
 
         await pool.query(
-            'INSERT INTO nota_fiscal (mes, ano, cpf_usuario, caminho_documento) VALUES ($1, $2, $3, $4)', 
-            [mes, ano, cpf_usuario, result.rows[0].caminho]
-        );
+        'INSERT INTO nota_fiscal (mes, ano, cpf_usuario, caminho_documento) VALUES ($1, $2, $3, $4)',
+        [mes, ano, cpf_usuario, result.rows[0].caminho]);
 
+        console.log('a');
         await pool.query('COMMIT');
 
         return res.status(200).json({ message: 'Nota fiscal cadastrado com sucesso.' });
@@ -657,8 +756,8 @@ router.post('/admin/clt/ponto', autenticarToken, verificarAdmin, async (req, res
 });
 
 //ROTA LISTAR DO USUARIO PELO ADM
-router.get('/admin/clt/ponto', autenticarToken, verificarAdmin, async (req, res) => {
-    const { cpf_usuario } = req.body;
+router.get('/admin/clt/ponto/:cpf_usuario', autenticarToken, verificarAdmin, async (req, res) => {
+    const { cpf_usuario } = req.params;
     if (!cpf_usuario) {
         return errorResponse(res, 400, 'Cpf obrigatório');
     }
@@ -684,10 +783,6 @@ router.get('/clt/ponto', autenticarToken, async (req, res) => {
         errorResponse(res, 500, 'Erro ao deletar ponto.', error.message); 
     }
 });
-
-
-
-
 
 router.post('/clt/ponto', autenticarToken, async (req, res) => {
     const { entrada_saida } = req.body;
