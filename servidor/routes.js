@@ -694,12 +694,10 @@ router.post('/admin/holerite/del', autenticarToken, verificarAdmin, async (req, 
 
 //<><><> Download de arquivo de holerite
 router.post("/admin/holerite/dow", autenticarToken, async (req, res) => {
-    console.log("Dow");
-
     const { cpf, mes, ano } = req.body;
 
     try {
-        const result = await pool.query("SELECT d.nome FROM documento d JOIN holerite h ON documento.caminho = h.caminho_documeno WHERE h.cpf_usuario = $1 AND h.mes = $2 AND h.ano = $3", [cpf_usuario, mes, ano]);
+        const result = await pool.query("SELECT d.nome FROM documento d JOIN holerite h ON d.caminho = h.caminho_documento WHERE h.cpf_usuario = $1 AND h.mes = $2 AND h.ano = $3", [cpf, mes, ano]);
 
 
         if (result.rows.length === 0) {
@@ -714,8 +712,6 @@ router.post("/admin/holerite/dow", autenticarToken, async (req, res) => {
                 res.status(500).json({ error: "Error downloading file" });
             }
         });
-
-        console.log("A");
     } catch (error) {
         res.status(500).json({ error: "Database error", details: error.message });
     }
